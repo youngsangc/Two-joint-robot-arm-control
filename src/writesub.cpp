@@ -29,7 +29,6 @@ bool is_run = true; //전역변수
 int Control_Cycle = 10; //ms //컨트롤 주기를 10미리세크로 초기화한다.
 
 
-
 double m = PI;
 //시간 관련
 double t = 0;
@@ -59,7 +58,6 @@ struct Joint {
 //functions
 
 //main 함수 앞에 미리 추후에 정의 할 함수들을 선언해놓는다.
-void processU(void);
 void processK(void);
 void dxl_initailize(void);
 void set_dxl_goal(int dxl_1_posi, int dxl_2_posi);
@@ -77,55 +75,37 @@ struct Joint J_goal;
 struct Joint Compute_IK(struct End_point EP);
 
 
-
-
 void msgCallback(const std_msgs::String::ConstPtr& msg)
 {
 MsgData Data;
 Data.data=msg->data;
 if(msg->data=="U"){
-
-
-
 dxl_initailize();
 
+//time_spec이라는 구조체의 객체인 next_time를 선언하였다. 
 
   static struct timespec next_time;
-
-  clock_gettime(CLOCK_MONOTONIC, &next_time); 
-
-  while(is_run) //1하면 종료가 잘 안됨. is run으로//is_run은 처음에 전역변수로 true라고 초기화 했었다. 
-  {
-    next_time.tv_sec += (next_time.tv_nsec + Control_Cycle * 1000000) / 1000000000;////ms
-    next_time.tv_nsec = (next_time.tv_nsec + Control_Cycle * 1000000) % 1000000000;
-
-     
-     
-     
-    processU();
-     
- 
-  
-
-    clock_nanosleep(CLOCK_MONOTONIC,TIMER_ABSTIME,&next_time,NULL);
+//static struct timespec curr_time;
 
 
-    
-  }
- 
+//아래의 clock_gettime이라는 함수의 형식이다. 
+//int clock_gettime(clockid_t clk_id, struct timespec *tp);
 
+//첫번째 매개변수로 clk_id가 입력되는데 clk_id에는 여러가지 종류가있고 그에 대한 설명은 다음 주소에서 확인가능하다.
+//https://hand-over.tistory.com/74
 
+//우리는 이 중 CLOCK_MONOTONIC 라고하는 clk_id를 사용할 것인데 시계의 작동 기준은 다음과 같다.
+//단조시계로 특정 시간부터 흐른 시간을 측정한다.(일반적으로 부팅이후 시간) 
+//시스템 관리자는 이 값을 초기화 할 수 있습니다.
 
+//다음은 두번째 매개변수로 입력되는 포인터변수 tp의 자료형인 timespec 구조체에 대한 선언내용이다. 
 
+// struct timespec {
+//         time_t    tv_sec;      /* seconds */ 
+//         long      tv_nsec;     /* nanoseconds */
+// };
 
-}
-else if(msg->data=="K"){
-
-
-dxl_initailize();
-
-
-  static struct timespec next_time;
+//clock_gettime이라는 함수의 두번째 요소로 next_time(객체)의 주소를 입력해주었다.  
 
   clock_gettime(CLOCK_MONOTONIC, &next_time); 
 
@@ -147,6 +127,17 @@ dxl_initailize();
  
 
 
+
+
+
+}
+else if(msg->data=="K"){
+
+
+
+
+
+
 }
 }
 
@@ -161,14 +152,12 @@ ros::Subscriber thread =nh.subscribe("thread",100,msgCallback);
 
 ros::spin();
 
-
-
 return 0;
 
 
 }
 
-void processU(void) {
+void processK(void) {
 
 // 끝점에 대한 정보를 담고있는 구조체 End_point의 객체인 target과 EP_goal을 선언한다.
  static struct End_point target; 
@@ -293,219 +282,6 @@ EP_goal.y=0.2;
 
   t=t+dt;
 }
-
-void processK(void) {
-
-// 끝점에 대한 정보를 담고있는 구조체 End_point의 객체인 target과 EP_goal을 선언한다.
- static struct End_point target; 
-
-
- static struct End_point EP_goal;
-  EP_goal.x = 0;
-  EP_goal.y = 0.2;
-
-  //J_goal = Compute_IK(EP_goal); //IK(역기구학 함수)에 좌표값을 넣으면 나오는 리턴 값을 J_goal에 저장한다.
-  //set_dxl_goal(J_goal.TH1,J_goal.TH2); //위의 함수에서 결과 값으로 나온 세타값을 set_dxl_goal이라는 함수에 대입한다.
-  //dxl_go();
-  //groupSyncWrite.clearParam();
-
-  read_dxl_postion();
-  static struct End_point E;
-  E =  get_present_XY();
-  ROS_INFO("x:%lf, y:%lf",E.x,E.y);
-
-  if (t <= T) {
-
-  target.x =  E.x + (EP_goal.x - E.x )*0.5*(1 - cos(PI* t/T));
-  target.y =  E.y + (EP_goal.y - E.y )*0.5*(1 - cos(PI* t/T));
-
-  static struct Joint joint_goal;
-  joint_goal = Compute_IK(target);
-  set_dxl_goal(radian_to_tick1(joint_goal.TH1), radian_to_tick2(joint_goal.TH2));
-  dxl_go();
-
-  // Clear syncwrite parameter storage
-  groupSyncWrite.clearParam();
-
-
-  }
-  else{
-   // t = 0;
-  }
-
-   if (t > T && t<6000) {
-
-    read_dxl_postion();
-  static struct End_point E;
-  E =  get_present_XY();
-  ROS_INFO("x:%lf, y:%lf",E.x,E.y);
-
-EP_goal.x=0;
-EP_goal.y=0.15;
-
-
-  target.x =  E.x + (EP_goal.x - E.x )*0.5*(1 - cos(PI* (t-3000)/T));
-  target.y =  E.y + (EP_goal.y - E.y )*0.5*(1 - cos(PI* (t-3000)/T));
-
-  static struct Joint joint_goal;
-  joint_goal = Compute_IK(target);
-  set_dxl_goal(radian_to_tick1(joint_goal.TH1), radian_to_tick2(joint_goal.TH2));
-  dxl_go();
-
-  // Clear syncwrite parameter storage
-  groupSyncWrite.clearParam();
-
-  
-  }
-  else{
-   // t = 0;
-  }
-if (t > 6000 && t<9000) {
-
-    read_dxl_postion();
-  static struct End_point E;
-  E =  get_present_XY();
-  ROS_INFO("x:%lf, y:%lf",E.x,E.y);
-
-EP_goal.x=0.05;
-EP_goal.y=0.2;
-
-
-  target.x =  E.x + (EP_goal.x - E.x )*0.5*(1 - cos(PI* (t-6000)/T));
-  target.y =  E.y + (EP_goal.y - E.y )*0.5*(1 - cos(PI* (t-6000)/T));
-
-  static struct Joint joint_goal;
-  joint_goal = Compute_IK(target);
-  set_dxl_goal(radian_to_tick1(joint_goal.TH1), radian_to_tick2(joint_goal.TH2));
-  dxl_go();
-
-  // Clear syncwrite parameter storage
-  groupSyncWrite.clearParam();
-
-  
-  }
-  else{
-   // t = 0;
-  }
-if (t > 9000 && t<12000) {
-
-    read_dxl_postion();
-  static struct End_point E;
-  E =  get_present_XY();
-  ROS_INFO("x:%lf, y:%lf",E.x,E.y);
-
-EP_goal.x=0;
-EP_goal.y=0.15;
-
-
-  target.x =  E.x + (EP_goal.x - E.x )*0.5*(1 - cos(PI* (t-9000)/T));
-  target.y =  E.y + (EP_goal.y - E.y )*0.5*(1 - cos(PI* (t-9000)/T));
-
-  static struct Joint joint_goal;
-  joint_goal = Compute_IK(target);
-  set_dxl_goal(radian_to_tick1(joint_goal.TH1), radian_to_tick2(joint_goal.TH2));
-  dxl_go();
-
-  // Clear syncwrite parameter storage
-  groupSyncWrite.clearParam();
-
-  
-  }
-  else{
-   // t = 0;
-  }
-  if (t > 12000 && t<15000) {
-
-    read_dxl_postion();
-  static struct End_point E;
-  E =  get_present_XY();
-  ROS_INFO("x:%lf, y:%lf",E.x,E.y);
-
-EP_goal.x=0;
-EP_goal.y=0.1;
-
-
-  target.x =  E.x + (EP_goal.x - E.x )*0.5*(1 - cos(PI* (t-12000)/T));
-  target.y =  E.y + (EP_goal.y - E.y )*0.5*(1 - cos(PI* (t-12000)/T));
-
-  static struct Joint joint_goal;
-  joint_goal = Compute_IK(target);
-  set_dxl_goal(radian_to_tick1(joint_goal.TH1), radian_to_tick2(joint_goal.TH2));
-  dxl_go();
-
-  // Clear syncwrite parameter storage
-  groupSyncWrite.clearParam();
-
-  
-  }
-  else{
-   // t = 0;
-  }
-  if (t > 15000 && t<18000) {
-
-    read_dxl_postion();
-  static struct End_point E;
-  E =  get_present_XY();
-  ROS_INFO("x:%lf, y:%lf",E.x,E.y);
-
-EP_goal.x=0;
-EP_goal.y=0.15;
-
-
-  target.x =  E.x + (EP_goal.x - E.x )*0.5*(1 - cos(PI* (t-15000)/T));
-  target.y =  E.y + (EP_goal.y - E.y )*0.5*(1 - cos(PI* (t-15000)/T));
-
-  static struct Joint joint_goal;
-  joint_goal = Compute_IK(target);
-  set_dxl_goal(radian_to_tick1(joint_goal.TH1), radian_to_tick2(joint_goal.TH2));
-  dxl_go();
-
-  // Clear syncwrite parameter storage
-  groupSyncWrite.clearParam();
-
-  
-  }
-  else{
-   // t = 0;
-  }
-  if (t > 18000 && t<21000) {
-
-    read_dxl_postion();
-  static struct End_point E;
-  E =  get_present_XY();
-  ROS_INFO("x:%lf, y:%lf",E.x,E.y);
-
-EP_goal.x=0.05;
-EP_goal.y=0.1;
-
-
-  target.x =  E.x + (EP_goal.x - E.x )*0.5*(1 - cos(PI* (t-18000)/T));
-  target.y =  E.y + (EP_goal.y - E.y )*0.5*(1 - cos(PI* (t-18000)/T));
-
-  static struct Joint joint_goal;
-  joint_goal = Compute_IK(target);
-  set_dxl_goal(radian_to_tick1(joint_goal.TH1), radian_to_tick2(joint_goal.TH2));
-  dxl_go();
-
-  // Clear syncwrite parameter storage
-  groupSyncWrite.clearParam();
-
-  
-  }
-  else{
-   // t = 0;
-  }
-
-
-  t=t+dt;
-  
-}
-
-
-
-
-
-
 
 //open port, set baud, torqeu on dxl 1,2
 void dxl_initailize(void) {
